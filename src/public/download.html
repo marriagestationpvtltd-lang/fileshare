@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>FileShare · Download</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-slate-100 min-h-screen flex flex-col items-center justify-center font-sans p-4">
+
+  <div class="bg-white rounded-2xl shadow-xl w-full max-w-md p-8 space-y-6">
+    <!-- Header -->
+    <div class="text-center">
+      <div class="text-5xl mb-2">📂</div>
+      <h1 class="text-xl font-bold text-gray-800">FileShare</h1>
+      <p class="text-sm text-gray-400">Secure file delivery</p>
+    </div>
+
+    <!-- Loading -->
+    <div id="spinner" class="flex justify-center py-4">
+      <svg class="animate-spin h-8 w-8 text-indigo-500" viewBox="0 0 24 24" fill="none">
+        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
+        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
+      </svg>
+    </div>
+
+    <!-- Error -->
+    <div id="errorBox"
+         class="hidden bg-red-50 border border-red-200 rounded-xl p-4 text-sm text-red-700 text-center">
+    </div>
+
+    <!-- File card -->
+    <div id="fileCard" class="hidden space-y-4">
+      <!-- Info table -->
+      <div class="bg-slate-50 rounded-xl p-4 space-y-2.5 text-sm">
+        <div class="flex justify-between gap-2">
+          <span class="text-gray-500 shrink-0">File</span>
+          <span id="infoName" class="font-semibold text-gray-800 text-right break-all"></span>
+        </div>
+        <div class="flex justify-between gap-2">
+          <span class="text-gray-500 shrink-0">Size</span>
+          <span id="infoSize" class="text-gray-700"></span>
+        </div>
+        <div class="flex justify-between gap-2">
+          <span class="text-gray-500 shrink-0">Type</span>
+          <span id="infoType" class="text-gray-700 text-right"></span>
+        </div>
+        <div id="infoExpiryRow" class="hidden flex justify-between gap-2">
+          <span class="text-gray-500 shrink-0">Expires</span>
+          <span id="infoExpiry" class="text-gray-700 text-right"></span>
+        </div>
+        <div id="infoDownloadsRow" class="hidden flex justify-between gap-2">
+          <span class="text-gray-500 shrink-0">Downloads left</span>
+          <span id="infoDownloads" class="text-gray-700"></span>
+        </div>
+      </div>
+
+      <!-- Password box -->
+      <div id="passwordBox" class="hidden space-y-2">
+        <p class="text-sm font-medium text-gray-700">🔒 This file is password-protected</p>
+        <input id="passwordInput" type="password" placeholder="Enter password"
+               class="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
+               onkeydown="if(event.key==='Enter') download()" />
+        <p id="pwError" class="hidden text-xs text-red-500">Incorrect password. Try again.</p>
+      </div>
+
+      <!-- Buttons -->
+      <div class="flex flex-col gap-2">
+        <button id="downloadBtn" onclick="download()"
+                class="w-full bg-indigo-600 text-white font-semibold py-3 rounded-xl hover:bg-indigo-700 active:bg-indigo-800 transition text-sm disabled:opacity-50">
+          ⬇ Download
+        </button>
+        <button id="previewBtn" onclick="openPreview()"
+                class="hidden w-full border border-indigo-300 text-indigo-700 font-medium py-2.5 rounded-xl hover:bg-indigo-50 transition text-sm">
+          👁 Preview in browser
+        </button>
+      </div>
+
+      <!-- Download spinner -->
+      <div id="dlStatus" class="hidden text-center space-y-2 py-1">
+        <svg class="animate-spin h-5 w-5 text-indigo-500 mx-auto" viewBox="0 0 24 24" fill="none">
+          <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
+          <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
+        </svg>
+        <p class="text-xs text-gray-500">Preparing download…</p>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const token = window.location.pathname.split('/').pop();
+    let fileInfo = null;
+
+    function fmtSize(bytes) {
+      if (bytes == null) return '—';
+      if (bytes < 1024) return bytes + ' B';
+      if (bytes < 1024 ** 2) return (bytes / 1024).toFixed(1) + ' KB';
+      if (bytes < 1024 ** 3) return (bytes / 1024 ** 2).toFixed(1) + ' MB';
+      return (bytes / 1024 ** 3).toFixed(2) + ' GB';
+    }
+
+    function showError(text) {
+      document.getElementById('spinner').classList.add('hidden');
+      const box = document.getElementById('errorBox');
+      box.textContent = text;
+      box.classList.remove('hidden');
+    }
+
+    async function load() {
+      try {
+        const res  = await fetch('/info/' + token);
+        const data = await res.json();
+        if (!res.ok) { showError(data.error || 'This link is invalid or has expired.'); return; }
+        fileInfo = data;
+        renderCard(data);
+      } catch {
+        showError('Failed to load file info. Check your connection and try again.');
+      }
+    }
+
+    function renderCard(info) {
+      document.getElementById('spinner').classList.add('hidden');
+      document.getElementById('fileCard').classList.remove('hidden');
+
+      document.getElementById('infoName').textContent = info.filename  || 'Unknown file';
+      document.getElementById('infoSize').textContent = fmtSize(info.size);
+      document.getElementById('infoType').textContent = info.mime_type || '—';
+
+      if (info.expires_at) {
+        document.getElementById('infoExpiryRow').classList.remove('hidden');
+        document.getElementById('infoExpiry').textContent = new Date(info.expires_at).toLocaleString();
+      }
+      if (info.downloads_remaining !== null) {
+        document.getElementById('infoDownloadsRow').classList.remove('hidden');
+        document.getElementById('infoDownloads').textContent = info.downloads_remaining;
+      }
+      if (info.password_protected) {
+        document.getElementById('passwordBox').classList.remove('hidden');
+      }
+
+      const mt = info.mime_type || '';
+      const previewable = mt.startsWith('image/') ||
+                          mt === 'application/pdf' ||
+                          mt.startsWith('text/') ||
+                          mt === 'application/json';
+      if (previewable) {
+        document.getElementById('previewBtn').classList.remove('hidden');
+      }
+
+      document.title = (info.filename || 'File') + ' · FileShare';
+    }
+
+    // ── Password helper ───────────────────────────────────────────────────────
+    function getPassword() {
+      return (document.getElementById('passwordInput') || {}).value || '';
+    }
+    function requirePassword() {
+      if (fileInfo && fileInfo.password_protected && !getPassword()) {
+        document.getElementById('passwordInput').focus();
+        return false;
+      }
+      return true;
+    }
+
+    // ── Download ──────────────────────────────────────────────────────────────
+    async function download() {
+      if (!requirePassword()) return;
+      document.getElementById('pwError').classList.add('hidden');
+
+      // Non-password: direct navigation (no memory overhead for large files)
+      if (!fileInfo.password_protected) {
+        window.location.href = '/d/' + token;
+        return;
+      }
+
+      // Password-protected: fetch with header, stream to blob
+      const btn = document.getElementById('downloadBtn');
+      btn.disabled = true;
+      document.getElementById('dlStatus').classList.remove('hidden');
+
+      try {
+        const res = await fetch('/d/' + token, {
+          headers: { 'x-download-password': getPassword() }
+        });
+
+        if (res.status === 401) {
+          document.getElementById('pwError').classList.remove('hidden');
+          return;
+        }
+        if (!res.ok) {
+          const err = await res.json();
+          showError(err.error || 'Download failed.');
+          return;
+        }
+
+        const blob = await res.blob();
+        const disposition = res.headers.get('Content-Disposition') || '';
+        const m = disposition.match(/filename="([^"]+)"/);
+        const filename = m ? decodeURIComponent(m[1]) : (fileInfo.filename || 'download');
+
+        const url = URL.createObjectURL(blob);
+        const a   = document.createElement('a');
+        a.href     = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        URL.revokeObjectURL(url);
+      } catch {
+        showError('Download failed. Please try again.');
+      } finally {
+        btn.disabled = false;
+        document.getElementById('dlStatus').classList.add('hidden');
+      }
+    }
+
+    // ── Preview ───────────────────────────────────────────────────────────────
+    async function openPreview() {
+      if (!requirePassword()) return;
+      document.getElementById('pwError').classList.add('hidden');
+
+      if (!fileInfo.password_protected) {
+        window.open('/preview/' + token, '_blank');
+        return;
+      }
+
+      // Password-protected preview via fetch → blob → new tab
+      try {
+        const res = await fetch('/preview/' + token, {
+          headers: { 'x-download-password': getPassword() }
+        });
+        if (res.status === 401) { document.getElementById('pwError').classList.remove('hidden'); return; }
+        if (!res.ok) { const e = await res.json(); showError(e.error || 'Preview failed.'); return; }
+        const blob = await res.blob();
+        window.open(URL.createObjectURL(blob), '_blank');
+      } catch {
+        showError('Preview failed. Please try again.');
+      }
+    }
+
+    load();
+  </script>
+</body>
+</html>

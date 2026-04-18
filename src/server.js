@@ -51,6 +51,15 @@ app.use('/admin', adminLimiter, adminRouter);
 // Public download / preview routes
 app.use('/', downloadLimiter, downloadRouter);
 
+// Serve admin dashboard and download UI (static HTML)
+const PUBLIC_DIR = path.join(__dirname, 'public');
+app.use(express.static(PUBLIC_DIR));
+
+// Share page: /share/:token → download.html (JS reads token from URL)
+app.get('/share/:token', (_req, res) => {
+  res.sendFile(path.join(PUBLIC_DIR, 'download.html'));
+});
+
 // 404 fallback
 app.use((_req, res) => {
   res.status(404).json({ error: 'Not found' });

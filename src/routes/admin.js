@@ -105,6 +105,7 @@ router.post('/links', express.json(), (req, res) => {
 
   res.status(201).json({
     link,
+    share_url:    `${baseUrl}/share/${token}`,
     download_url: `${baseUrl}/d/${token}`,
     preview_url:  `${baseUrl}/preview/${token}`,
     info_url:     `${baseUrl}/info/${token}`,
@@ -123,6 +124,7 @@ router.get('/links', (_req, res) => {
   const baseUrl = process.env.BASE_URL || 'http://localhost:3000';
   const enriched = links.map((l) => ({
     ...l,
+    share_url:    `${baseUrl}/share/${l.token}`,
     download_url: `${baseUrl}/d/${l.token}`,
     preview_url:  `${baseUrl}/preview/${l.token}`,
   }));

@@ -1,0 +1,490 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>FileShare · Admin</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-slate-100 min-h-screen text-gray-800 font-sans">
+
+  <!-- NAV -->
+  <nav class="bg-indigo-700 text-white shadow-lg sticky top-0 z-40">
+    <div class="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between gap-4">
+      <span class="text-lg font-bold tracking-tight whitespace-nowrap">📂 FileShare Admin</span>
+      <div class="flex items-center gap-2 flex-1 max-w-lg">
+        <input id="secretInput" type="password"
+               class="flex-1 rounded px-3 py-1.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-indigo-300"
+               placeholder="Admin Secret" />
+        <button onclick="connect()"
+                class="bg-white text-indigo-700 font-semibold text-sm px-4 py-1.5 rounded hover:bg-indigo-50 transition whitespace-nowrap">
+          Connect
+        </button>
+        <span id="connDot" class="h-3 w-3 rounded-full bg-gray-400 shrink-0" title="Disconnected"></span>
+      </div>
+    </div>
+  </nav>
+
+  <main class="max-w-6xl mx-auto px-4 py-8 space-y-8">
+
+    <!-- UPLOAD -->
+    <section class="bg-white rounded-2xl shadow p-6">
+      <h2 class="text-base font-semibold mb-4">Upload File</h2>
+      <div id="dropZone"
+           class="border-2 border-dashed border-indigo-200 rounded-xl p-14 text-center cursor-pointer hover:border-indigo-400 hover:bg-indigo-50 transition select-none"
+           onclick="fileInput.click()"
+           ondragover="onDragOver(event)"
+           ondragleave="onDragLeave()"
+           ondrop="onDrop(event)">
+        <div class="text-4xl mb-2">📤</div>
+        <p class="text-gray-500 text-sm">
+          Drag &amp; drop a file here, or
+          <span class="text-indigo-600 underline">click to browse</span>
+        </p>
+      </div>
+      <input id="fileInput" type="file" class="hidden" onchange="startUpload(this.files[0])" />
+
+      <div id="uploadBar" class="hidden mt-4 space-y-1">
+        <div class="flex justify-between text-xs text-gray-500">
+          <span id="uploadName" class="truncate max-w-xs"></span>
+          <span id="uploadPct">0%</span>
+        </div>
+        <div class="h-2 bg-gray-200 rounded-full overflow-hidden">
+          <div id="uploadFill" class="h-full bg-indigo-500 transition-all duration-100" style="width:0"></div>
+        </div>
+      </div>
+      <p id="uploadMsg" class="mt-2 text-sm min-h-[1.25rem]"></p>
+    </section>
+
+    <!-- FILES -->
+    <section class="bg-white rounded-2xl shadow p-6">
+      <div class="flex justify-between items-center mb-4">
+        <h2 class="text-base font-semibold">Uploaded Files</h2>
+        <button onclick="loadFiles()" class="text-xs text-indigo-600 hover:underline">↻ Refresh</button>
+      </div>
+      <div id="filesTable" class="text-sm text-gray-400 italic">Connect to load files.</div>
+    </section>
+
+    <!-- LINKS -->
+    <section class="bg-white rounded-2xl shadow p-6">
+      <div class="flex justify-between items-center mb-4">
+        <h2 class="text-base font-semibold">Share Links</h2>
+        <button onclick="loadLinks()" class="text-xs text-indigo-600 hover:underline">↻ Refresh</button>
+      </div>
+      <div id="linksTable" class="text-sm text-gray-400 italic">Connect to load links.</div>
+    </section>
+
+  </main>
+
+  <!-- CREATE LINK MODAL -->
+  <div id="modal" class="hidden fixed inset-0 bg-black/40 flex items-center justify-center z-50 px-4">
+    <div class="bg-white rounded-2xl shadow-xl w-full max-w-md p-6">
+      <h3 class="font-semibold text-base mb-1">Create Share Link</h3>
+      <p id="mFilenameLabel" class="text-xs text-gray-500 mb-4 truncate"></p>
+      <input type="hidden" id="mFileId" />
+
+      <div class="space-y-3 text-sm">
+        <label class="block">
+          <span class="text-gray-600 font-medium">Max Downloads
+            <span class="font-normal text-gray-400">(blank = unlimited)</span>
+          </span>
+          <input id="mMax" type="number" min="1" placeholder="e.g. 10"
+                 class="mt-1 block w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-400" />
+        </label>
+        <label class="block">
+          <span class="text-gray-600 font-medium">Expires in Hours
+            <span class="font-normal text-gray-400">(blank = never)</span>
+          </span>
+          <input id="mExpiry" type="number" min="1" placeholder="e.g. 24"
+                 class="mt-1 block w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-400" />
+        </label>
+        <label class="block">
+          <span class="text-gray-600 font-medium">Password
+            <span class="font-normal text-gray-400">(optional)</span>
+          </span>
+          <input id="mPassword" type="password" placeholder="No password"
+                 class="mt-1 block w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-400" />
+        </label>
+      </div>
+
+      <div id="modalMsg" class="mt-3 text-sm min-h-[1.5rem] break-all"></div>
+
+      <div class="mt-4 flex gap-2 justify-end">
+        <button onclick="closeModal()"
+                class="px-4 py-2 text-sm border rounded-lg hover:bg-gray-50">Cancel</button>
+        <button onclick="createLink()"
+                class="px-4 py-2 text-sm bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 font-medium">
+          Generate Link
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // ── State ────────────────────────────────────────────────────────────────
+    const fileInput = document.getElementById('fileInput');
+    // Secret is kept only in memory (not stored) to avoid clear-text persistence.
+    let secret = '';
+
+    // ── Helpers ──────────────────────────────────────────────────────────────
+    function fmtSize(bytes) {
+      if (bytes == null) return '—';
+      if (bytes < 1024) return bytes + ' B';
+      if (bytes < 1024 ** 2) return (bytes / 1024).toFixed(1) + ' KB';
+      if (bytes < 1024 ** 3) return (bytes / 1024 ** 2).toFixed(1) + ' MB';
+      return (bytes / 1024 ** 3).toFixed(2) + ' GB';
+    }
+    function fmtDate(s) { return s ? new Date(s).toLocaleString() : '—'; }
+
+    function setMsg(id, text, color) {
+      const el = document.getElementById(id);
+      el.textContent = text;
+      el.className = `mt-2 text-sm text-${color}-600 min-h-[1.25rem]`;
+    }
+
+    async function api(method, path, body) {
+      const opts = { method, headers: { 'x-admin-secret': secret } };
+      if (body !== undefined) {
+        opts.headers['Content-Type'] = 'application/json';
+        opts.body = JSON.stringify(body);
+      }
+      const res = await fetch(path, opts);
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Request failed');
+      return data;
+    }
+
+    function setConn(ok) {
+      const dot = document.getElementById('connDot');
+      dot.className = `h-3 w-3 rounded-full shrink-0 ${ok ? 'bg-green-400' : 'bg-red-400'}`;
+      dot.title = ok ? 'Connected' : 'Auth failed';
+    }
+
+    // ── Connect ───────────────────────────────────────────────────────────────
+    async function connect() {
+      secret = document.getElementById('secretInput').value.trim();
+      try {
+        await api('GET', '/admin/files');
+        setConn(true);
+        loadFiles();
+        loadLinks();
+      } catch {
+        setConn(false);
+        document.getElementById('filesTable').innerHTML =
+          '<p class="text-red-500 italic text-sm">Auth failed — check your Admin Secret.</p>';
+        document.getElementById('linksTable').innerHTML = '';
+      }
+    }
+
+    // ── Upload ────────────────────────────────────────────────────────────────
+    function onDragOver(e) {
+      e.preventDefault();
+      document.getElementById('dropZone').classList.add('border-indigo-500', 'bg-indigo-50');
+    }
+    function onDragLeave() {
+      document.getElementById('dropZone').classList.remove('border-indigo-500', 'bg-indigo-50');
+    }
+    function onDrop(e) {
+      e.preventDefault();
+      onDragLeave();
+      if (e.dataTransfer.files[0]) startUpload(e.dataTransfer.files[0]);
+    }
+
+    function startUpload(file) {
+      if (!file) return;
+      if (!secret) { setMsg('uploadMsg', '⚠ Enter Admin Secret first.', 'yellow'); return; }
+
+      document.getElementById('uploadBar').classList.remove('hidden');
+      document.getElementById('uploadName').textContent = file.name;
+      document.getElementById('uploadFill').style.width = '0';
+      document.getElementById('uploadPct').textContent = '0%';
+      setMsg('uploadMsg', '', 'gray');
+
+      const fd = new FormData();
+      fd.append('file', file);
+      const xhr = new XMLHttpRequest();
+
+      xhr.upload.addEventListener('progress', e => {
+        if (!e.lengthComputable) return;
+        const p = Math.round(e.loaded / e.total * 100) + '%';
+        document.getElementById('uploadFill').style.width = p;
+        document.getElementById('uploadPct').textContent = p;
+      });
+
+      xhr.addEventListener('load', () => {
+        document.getElementById('uploadBar').classList.add('hidden');
+        fileInput.value = '';
+        if (xhr.status === 201) {
+          const d = JSON.parse(xhr.responseText);
+          setMsg('uploadMsg', '✅ Uploaded: ' + d.file.original_name, 'green');
+          loadFiles();
+        } else {
+          const e = JSON.parse(xhr.responseText);
+          setMsg('uploadMsg', '❌ ' + (e.error || 'Upload failed'), 'red');
+        }
+      });
+
+      xhr.addEventListener('error', () => {
+        document.getElementById('uploadBar').classList.add('hidden');
+        setMsg('uploadMsg', '❌ Network error during upload.', 'red');
+      });
+
+      xhr.open('POST', '/admin/upload');
+      xhr.setRequestHeader('x-admin-secret', secret);
+      xhr.send(fd);
+    }
+
+    // ── Files table ───────────────────────────────────────────────────────────
+    async function loadFiles() {
+      const el = document.getElementById('filesTable');
+      try {
+        const { files } = await api('GET', '/admin/files');
+        if (!files.length) {
+          el.innerHTML = '<p class="text-gray-400 italic">No files uploaded yet.</p>';
+          return;
+        }
+
+        const wrap = document.createElement('div');
+        wrap.className = 'overflow-x-auto';
+        const table = document.createElement('table');
+        table.className = 'w-full text-sm text-left';
+        table.innerHTML = `
+          <thead class="text-xs text-gray-500 uppercase bg-gray-50">
+            <tr>
+              <th class="px-3 py-2">Name</th>
+              <th class="px-3 py-2">Size</th>
+              <th class="px-3 py-2">Type</th>
+              <th class="px-3 py-2">Uploaded</th>
+              <th class="px-3 py-2">Actions</th>
+            </tr>
+          </thead>`;
+        const tbody = document.createElement('tbody');
+        tbody.className = 'divide-y';
+
+        for (const f of files) {
+          const tr = document.createElement('tr');
+          tr.className = 'hover:bg-gray-50';
+
+          const tdName = document.createElement('td');
+          tdName.className = 'px-3 py-2 font-medium max-w-[14rem] truncate';
+          tdName.textContent = f.original_name;
+
+          const tdSize = document.createElement('td');
+          tdSize.className = 'px-3 py-2 text-gray-500 whitespace-nowrap';
+          tdSize.textContent = fmtSize(f.size);
+
+          const tdType = document.createElement('td');
+          tdType.className = 'px-3 py-2 text-gray-500 max-w-[10rem] truncate';
+          tdType.textContent = f.mime_type;
+
+          const tdDate = document.createElement('td');
+          tdDate.className = 'px-3 py-2 text-gray-500 whitespace-nowrap';
+          tdDate.textContent = fmtDate(f.created_at);
+
+          const tdActions = document.createElement('td');
+          tdActions.className = 'px-3 py-2';
+
+          const btnCreate = document.createElement('button');
+          btnCreate.className = 'text-indigo-600 hover:underline text-xs font-medium mr-3';
+          btnCreate.textContent = 'Create Link';
+          btnCreate.onclick = () => openModal(f.id, f.original_name);
+
+          const btnDel = document.createElement('button');
+          btnDel.className = 'text-red-500 hover:underline text-xs font-medium';
+          btnDel.textContent = 'Delete';
+          btnDel.onclick = () => deleteFile(f.id, f.original_name);
+
+          tdActions.appendChild(btnCreate);
+          tdActions.appendChild(btnDel);
+          tr.append(tdName, tdSize, tdType, tdDate, tdActions);
+          tbody.appendChild(tr);
+        }
+
+        table.appendChild(tbody);
+        wrap.appendChild(table);
+        el.innerHTML = '';
+        el.appendChild(wrap);
+      } catch (e) {
+        el.innerHTML = `<p class="text-red-500 text-sm">${e.message}</p>`;
+      }
+    }
+
+    async function deleteFile(id, name) {
+      if (!confirm(`Delete "${name}" and all its share links?`)) return;
+      try {
+        await api('DELETE', `/admin/files/${id}`);
+        loadFiles();
+        loadLinks();
+      } catch (e) { alert('Delete failed: ' + e.message); }
+    }
+
+    // ── Links table ───────────────────────────────────────────────────────────
+    async function loadLinks() {
+      const el = document.getElementById('linksTable');
+      try {
+        const { links } = await api('GET', '/admin/links');
+        if (!links.length) {
+          el.innerHTML = '<p class="text-gray-400 italic">No share links yet.</p>';
+          return;
+        }
+
+        const wrap = document.createElement('div');
+        wrap.className = 'overflow-x-auto';
+        const table = document.createElement('table');
+        table.className = 'w-full text-sm text-left';
+        table.innerHTML = `
+          <thead class="text-xs text-gray-500 uppercase bg-gray-50">
+            <tr>
+              <th class="px-3 py-2">File</th>
+              <th class="px-3 py-2">Share URL</th>
+              <th class="px-3 py-2">Downloads</th>
+              <th class="px-3 py-2">Expires</th>
+              <th class="px-3 py-2 text-center">🔒</th>
+              <th class="px-3 py-2">Actions</th>
+            </tr>
+          </thead>`;
+        const tbody = document.createElement('tbody');
+        tbody.className = 'divide-y';
+
+        for (const l of links) {
+          // Use share_url from the API so BASE_URL / ngrok URL is honoured.
+          const shareUrl = l.share_url || (window.location.origin + '/share/' + l.token);
+
+          const tr = document.createElement('tr');
+          tr.className = 'hover:bg-gray-50';
+
+          const tdFile = document.createElement('td');
+          tdFile.className = 'px-3 py-2 font-medium max-w-[10rem] truncate';
+          tdFile.textContent = l.original_name;
+
+          const tdUrl = document.createElement('td');
+          tdUrl.className = 'px-3 py-2';
+          const urlSpan = document.createElement('span');
+          urlSpan.className = 'text-indigo-600 font-mono text-xs cursor-pointer hover:underline';
+          urlSpan.textContent = shareUrl;
+          urlSpan.title = 'Click to copy';
+          urlSpan.onclick = () => copyUrl(shareUrl, urlSpan);
+          const hint = document.createElement('span');
+          hint.className = 'text-xs text-gray-400 ml-1';
+          hint.textContent = '(copy)';
+          tdUrl.appendChild(urlSpan);
+          tdUrl.appendChild(hint);
+
+          const tdDl = document.createElement('td');
+          tdDl.className = 'px-3 py-2 text-gray-500 whitespace-nowrap';
+          tdDl.textContent = l.max_downloads !== null
+            ? `${l.download_count} / ${l.max_downloads}`
+            : `${l.download_count} / ∞`;
+
+          const tdExp = document.createElement('td');
+          tdExp.className = 'px-3 py-2 text-gray-500 whitespace-nowrap';
+          tdExp.textContent = l.expires_at ? fmtDate(l.expires_at) : 'Never';
+
+          const tdPw = document.createElement('td');
+          tdPw.className = 'px-3 py-2 text-center';
+          tdPw.textContent = l.password_hash ? '🔒' : '—';
+
+          const tdActions = document.createElement('td');
+          tdActions.className = 'px-3 py-2 flex gap-3 items-center';
+
+          const openBtn = document.createElement('a');
+          openBtn.className = 'text-indigo-600 hover:underline text-xs font-medium';
+          openBtn.textContent = 'Open';
+          openBtn.href = shareUrl;
+          openBtn.target = '_blank';
+
+          const revokeBtn = document.createElement('button');
+          revokeBtn.className = 'text-red-500 hover:underline text-xs font-medium';
+          revokeBtn.textContent = 'Revoke';
+          revokeBtn.onclick = () => deleteLink(l.id);
+
+          tdActions.appendChild(openBtn);
+          tdActions.appendChild(revokeBtn);
+          tr.append(tdFile, tdUrl, tdDl, tdExp, tdPw, tdActions);
+          tbody.appendChild(tr);
+        }
+
+        table.appendChild(tbody);
+        wrap.appendChild(table);
+        el.innerHTML = '';
+        el.appendChild(wrap);
+      } catch (e) {
+        el.innerHTML = `<p class="text-red-500 text-sm">${e.message}</p>`;
+      }
+    }
+
+    function copyUrl(url, span) {
+      navigator.clipboard.writeText(url).then(() => {
+        const orig = span.textContent;
+        span.textContent = '✅ Copied!';
+        setTimeout(() => { span.textContent = orig; }, 1500);
+      });
+    }
+
+    async function deleteLink(id) {
+      if (!confirm('Revoke this share link?')) return;
+      try {
+        await api('DELETE', `/admin/links/${id}`);
+        loadLinks();
+      } catch (e) { alert('Revoke failed: ' + e.message); }
+    }
+
+    // ── Create Link Modal ─────────────────────────────────────────────────────
+    function openModal(fileId, filename) {
+      document.getElementById('mFileId').value = fileId;
+      document.getElementById('mFilenameLabel').textContent = filename;
+      document.getElementById('mMax').value = '';
+      document.getElementById('mExpiry').value = '';
+      document.getElementById('mPassword').value = '';
+      document.getElementById('modalMsg').textContent = '';
+      document.getElementById('modalMsg').className = 'mt-3 text-sm min-h-[1.5rem] break-all';
+      document.getElementById('modal').classList.remove('hidden');
+    }
+
+    function closeModal() {
+      document.getElementById('modal').classList.add('hidden');
+    }
+
+    async function createLink() {
+      const body = { file_id: Number(document.getElementById('mFileId').value) };
+      const max = document.getElementById('mMax').value;
+      const exp = document.getElementById('mExpiry').value;
+      const pw  = document.getElementById('mPassword').value;
+      if (max) body.max_downloads    = Number(max);
+      if (exp) body.expires_in_hours = Number(exp);
+      if (pw)  body.password         = pw;
+
+      try {
+        const data = await api('POST', '/admin/links', body);
+        // Use share_url from the API so BASE_URL / ngrok URL is honoured.
+        const shareUrl = data.share_url || (window.location.origin + '/share/' + data.link.token);
+
+        const msgEl = document.getElementById('modalMsg');
+        msgEl.className = 'mt-3 text-sm text-green-700 min-h-[1.5rem] break-all';
+        msgEl.innerHTML = '';
+
+        const tick = document.createTextNode('✅ ');
+        const a = document.createElement('a');
+        a.href = shareUrl;
+        a.target = '_blank';
+        a.className = 'underline font-mono';
+        a.textContent = shareUrl;
+        msgEl.appendChild(tick);
+        msgEl.appendChild(a);
+
+        navigator.clipboard.writeText(shareUrl).catch(() => {});
+        loadLinks();
+      } catch (e) {
+        const msgEl = document.getElementById('modalMsg');
+        msgEl.className = 'mt-3 text-sm text-red-600 min-h-[1.5rem] break-all';
+        msgEl.textContent = '❌ ' + e.message;
+      }
+    }
+
+    // Close modal on backdrop click
+    document.getElementById('modal').addEventListener('click', e => {
+      if (e.target === e.currentTarget) closeModal();
+    });
+  </script>
+</body>
+</html>
